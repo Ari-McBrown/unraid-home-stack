@@ -95,6 +95,7 @@ services:
     environment:
       HOST_CONTAINERNAME: qbittorrent
       WEBUI_PORT: 8080
+      TORRENTING_PORT: 6881
     volumes:
       - /mnt/user/downloads:/downloads:rw,shared
       - /mnt/user/media/movies:/movies:rw
