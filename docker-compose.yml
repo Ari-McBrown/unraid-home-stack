@@ -1,0 +1,166 @@
+##
+## Home Stack
+## This stack was designed for home use on an Unraid server.
+##
+services:
+
+  ##
+  ## Nginx-Proxy-Manager
+  ##
+  nginx-proxy:
+    container_name: nginx-proxy
+    image: jc21/nginx-proxy-manager
+    privileged: true
+    restart: unless-stopped
+    env_file:
+      - { path: .env }
+      - { path: .env.vaultwarden.pwd }
+    environment:
+      HOST_CONTAINERNAME: nginx-proxy
+      TCP_PORT_81: 81
+      TCP_PORT_80: 80
+      TCP_PORT_443: 443
+      TCP_PORT_3000: 3000
+      DB_SQLITE_FILE: '/data/database.sqlite'
+    volumes:
+      - /mnt/user/appdata/Nginx-Proxy-Manager-Official/data:/data:rw
+      - /mnt/user/appdata/Nginx-Proxy-Manager-Official/letsencrypt:/etc/letsencrypt:rw
+      - /tmp/Nginx-Proxy-Manager-Official/var/log:/var/log:rw
+    hostname: nginx-proxy
+    networks:
+      server_macvlan: {ipv4_address: 10.0.20.1}
+      vaultwarden_br: {}
+      qbittorrent_br: {}
+      jellyfin_br: {}
+    labels:
+      net.unraid.docker.managed: 'dockerman'
+      net.unraid.docker.webui: 'http://[IP]:81'
+      net.unraid.docker.icon: 'https://nginxproxymanager.com/icon.png'
+
+  ##
+  ## Maria DB
+  ##
+  mariadb:
+    container_name: mariadb
+    image: lscr.io/linuxserver/mariadb
+    restart: unless-stopped
+    env_file:
+      - { path: .env }
+      - { path: .env.mariadb.pwd }
+    environment:
+      HOST_CONTAINERNAME: mariadb
+    volumes:
+      - /mnt/user/appdata/mariadb:/config:rw
+    hostname: mariadb
+    networks:
+      mariadb_br: {}
+    labels:
+      net.unraid.docker.managed: 'dockerman'
+      net.unraid.docker.icon: 'https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/mariadb-logo.png'
+
+  ##
+  ## Vaultwarden
+  ##
+  vaultwarden:
+    container_name: vaultwarden
+    image: vaultwarden/server:latest
+    restart: unless-stopped
+    env_file:
+      - { path: .env }
+      - { path: .env.vaultwarden.pwd }
+    environment:
+      HOST_CONTAINERNAME: vaultwarden
+      SIGNUPS_ALLOWED: false
+      INVITATIONS_ALLOWED: true
+      WEBSOCKET_ENABLED: true
+    volumes:
+      - /mnt/user/appdata/vaultwarden:/data:rw
+    hostname: vaultwarden
+    networks:
+      vaultwarden_br: {}
+    labels:
+      net.unraid.docker.managed: 'dockerman'
+      net.unraid.docker.webui: 'http://[IP]:[PORT:80]/admin'
+      net.unraid.docker.icon: 'https://raw.githubusercontent.com/selfhosters/unRAID-CA-templates/master/templates/img/vaultwarden.png'
+
+  ##
+  ## qBitTorrent
+  ##
+  qbittorrent:
+    container_name: qbittorrent
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    env_file:
+      - { path: .env }
+    environment:
+      HOST_CONTAINERNAME: qbittorrent
+      WEBUI_PORT: 8080
+    volumes:
+      - /mnt/user/downloads:/downloads:rw,shared
+      - /mnt/user/media/movies:/movies:rw
+      - /mnt/user/media/series:/series:rw
+      - /mnt/user/appdata/qbittorrent:/config:rw
+    hostname: qbittorrent
+    networks:
+      qbittorrent_br: {}
+    ports:
+      - '8080:8080/tcp'
+      - '6881:6881/tcp'
+      - '6881:6881/udp'
+    labels:
+      net.unraid.docker.managed: 'dockerman'
+      net.unraid.docker.webui: 'http://[IP]:[PORT:8080]'
+      net.unraid.docker.icon: 'https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/qbittorrent-logo.png'
+
+  ##
+  ## Jellyfin
+  ##
+  jellyfin:
+    container_name: jellyfin
+    hostname: jellyfin
+    image: lscr.io/linuxserver/jellyfin
+    restart: unless-stopped
+    env_file:
+      - { path: .env }
+    environment:
+      HOST_CONTAINERNAME: jellyfin
+      JELLYFIN_PublishedServerUrl: 10.0.20.2
+    volumes:
+      - /mnt/user/media/series:/data/tvshows:rw
+      - /mnt/user/media/movies:/data/movies:rw
+      - /mnt/user/media/home-videos:/data/home-videos:rw
+      - /mnt/user/docker/jellyfin:/config:rw
+    networks:
+      jellyfin_br: {}
+    ports:
+      - '8096:8096/tcp'
+      - '8920:8920/tcp'
+      - '7359:7359/udp'
+      - '1900:1900/udp'
+    labels:
+      net.unraid.docker.managed: 'dockerman'
+      net.unraid.docker.webui: 'http://[IP]:[PORT:8096]'
+      net.unraid.docker.icon: 'https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/jellyfin-logo.png'
+
+##
+## Network configurations
+##
+networks:
+
+  ##
+  ## Custom service bridges
+  ##
+  mariadb_br: { driver: bridge }
+  vaultwarden_br: { driver: bridge }
+  qbittorrent_br: { driver: bridge }
+  jellyfin_br: { driver: bridge }
+
+  ##
+  ## Server MacVLAN network to let specific containers have dedicated IP addresses
+  ##
+  server_macvlan:
+    driver: macvlan
+    driver_opts: { parent: br0 }
+    ipam:
+      config:
+        - { subnet: '10.0.20.0/28', ip_range: '10.0.20.0/28', gateway: '10.0.20.14'}
